@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stellar Clock + Gemini AI</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* CRITICAL CSS: Ensures background renders immediately even if Tailwind fails */
         :root {
             --bg-color: #0f172a;
             --glass-bg: rgba(30, 41, 59, 0.7);
@@ -15,22 +14,41 @@
         }
 
         body {
-            background: radial-gradient(circle at top right, #1e293b, #0f172a);
-            background-color: #0f172a; /* Fallback color */
-            color: var(--text-main);
+            background: radial-gradient(circle at top right, #1e293b, #0f172a) !important;
+            background-color: #0f172a !important;
+            color: #f8fafc;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            overflow-x: hidden;
+            font-family: system-ui, -apple-system, sans-serif;
             margin: 0;
+            padding: 1rem;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.5s ease;
         }
 
         .glass-panel {
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+            width: 100%;
+            max-width: 32rem;
+            padding: 2rem;
+            display: none; /* Shown via JS */
+            flex-direction: column;
+            align-items: center;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
 
@@ -42,7 +60,6 @@
             border: 8px solid rgba(255, 255, 255, 0.05);
             position: relative;
             background: rgba(15, 23, 42, 0.5);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
         }
 
         .hand {
@@ -51,10 +68,9 @@
             left: 50%;
             transform-origin: bottom;
             border-radius: 10px;
-            transition: transform 0.05s cubic-bezier(0.4, 2.3, 0.3, 1);
         }
 
-        .hour-hand { width: 6px; height: 60px; background: var(--text-main); margin-left: -3px; z-index: 3; }
+        .hour-hand { width: 6px; height: 60px; background: #f8fafc; margin-left: -3px; z-index: 3; }
         .min-hand { width: 4px; height: 85px; background: #94a3b8; margin-left: -2px; z-index: 2; }
         .sec-hand { width: 2px; height: 95px; background: var(--accent-color); margin-left: -1px; z-index: 4; }
 
@@ -77,22 +93,14 @@
             transform-origin: 0 120px;
         }
 
-        .tab-content { display: none; animation: fadeIn 0.4s ease-out; }
-        .tab-content.active { display: flex; }
+        .tab-content { display: none; width: 100%; }
+        .tab-content.active { display: flex; animation: fadeIn 0.4s ease-out; }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
-
-        .ai-glow {
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
-            border: 1px solid rgba(56, 189, 248, 0.4);
-        }
-        
         .shimmer {
             background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%);
             background-size: 200% 100%;
@@ -104,13 +112,13 @@
         }
     </style>
 </head>
-<body class="p-4 bg-slate-950">
+<body>
 
-    <noscript>
-        <div class="text-white text-center">Please enable JavaScript to view this app.</div>
-    </noscript>
+    <div id="loading-overlay">
+        <div style="color: #38bdf8; font-family: sans-serif;">Initializing Stellar Clock...</div>
+    </div>
 
-    <div id="app-container" class="glass-panel w-full max-w-lg rounded-3xl overflow-hidden flex flex-col items-center p-6 md:p-8">
+    <div id="app-container" class="glass-panel">
         
         <!-- Navigation Tabs -->
         <div class="flex bg-slate-900/50 p-1 rounded-2xl mb-6 w-full">
@@ -120,7 +128,7 @@
         </div>
 
         <!-- Clock Tab -->
-        <div id="clock-tab" class="tab-content active flex-col items-center w-full">
+        <div id="clock-tab" class="tab-content active flex-col items-center">
             <div class="clock-face mb-6">
                 <div id="markers-container"></div>
                 <div class="hand hour-hand" id="hour-hand"></div>
@@ -131,65 +139,61 @@
 
             <div class="text-center w-full">
                 <h1 id="digital-time" class="text-5xl font-bold tracking-tight mb-2">00:00:00</h1>
-                <p id="current-date" class="text-sky-400 font-medium uppercase tracking-widest text-xs mb-6">MONDAY, JANUARY 1</p>
+                <p id="current-date" class="text-sky-400 font-medium uppercase tracking-widest text-xs mb-6">LOADING DATE...</p>
                 
-                <!-- AI Quote Section -->
                 <div id="quote-box" class="mt-4 p-4 rounded-2xl bg-slate-900/40 border border-white/5 italic text-slate-300 text-sm min-h-[60px] flex items-center justify-center relative group">
                     <span id="quote-text">Time is what we want most, but what we use worst.</span>
                     <button onclick="generateAIQuote()" class="absolute -top-3 -right-3 bg-sky-500 p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
                     </button>
                 </div>
             </div>
         </div>
 
         <!-- Stopwatch Tab -->
-        <div id="stopwatch-tab" class="tab-content flex-col items-center w-full">
+        <div id="stopwatch-tab" class="tab-content flex-col items-center">
             <div class="text-center mb-8">
                 <div id="sw-display" class="text-6xl font-mono font-light tracking-tighter mb-2">00:00.00</div>
                 <p class="text-slate-500 text-xs uppercase tracking-widest">Elapsed Time</p>
             </div>
-
             <div class="flex gap-4 mb-8 w-full">
-                <button id="sw-start-btn" onclick="toggleStopwatch()" class="flex-2 grow py-4 bg-sky-500 hover:bg-sky-400 text-white rounded-2xl font-bold transition-all">START</button>
-                <button id="sw-lap-btn" onclick="recordLap()" class="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-bold transition-all disabled:opacity-50" disabled>LAP</button>
-                <button id="sw-reset-btn" onclick="resetStopwatch()" class="flex-1 py-4 bg-slate-800 hover:bg-red-900/30 text-red-400 rounded-2xl font-bold transition-all">RESET</button>
+                <button id="sw-start-btn" onclick="toggleStopwatch()" class="flex-[2] py-4 bg-sky-500 text-white rounded-2xl font-bold">START</button>
+                <button id="sw-lap-btn" onclick="recordLap()" class="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-bold opacity-50" disabled>LAP</button>
+                <button id="sw-reset-btn" onclick="resetStopwatch()" class="flex-1 py-4 bg-slate-800 text-red-400 rounded-2xl font-bold">RESET</button>
             </div>
-
-            <div class="w-full bg-slate-900/30 rounded-2xl p-4 h-48 overflow-y-auto custom-scrollbar" id="laps-container">
+            <div class="w-full bg-slate-900/30 rounded-2xl p-4 h-48 overflow-y-auto" id="laps-container">
                 <div class="text-slate-500 text-center text-sm mt-12">No laps recorded</div>
             </div>
         </div>
 
         <!-- AI Plan Tab -->
-        <div id="ai-tab" class="tab-content flex-col w-full">
+        <div id="ai-tab" class="tab-content flex-col">
             <h2 class="text-xl font-bold mb-2">✨ Smart Day Planner</h2>
-            <p class="text-slate-400 text-xs mb-4">Paste your messy schedule below. Gemini will organize it.</p>
-            
-            <textarea id="ai-input" class="w-full h-24 bg-slate-900/50 rounded-xl p-3 text-sm border border-white/10 focus:border-sky-500 outline-none resize-none mb-4" placeholder="e.g. Gym at 8am, lunch with Sarah at 12:30, project deadline at 5pm..."></textarea>
-            
-            <button id="ai-plan-btn" onclick="generateSchedule()" class="w-full py-3 bg-gradient-to-r from-sky-600 to-blue-600 rounded-xl font-bold text-sm mb-6 flex items-center justify-center gap-2">
-                <span>GENERATE ✨</span>
-            </button>
-
-            <div id="ai-result" class="w-full bg-slate-900/50 rounded-2xl p-4 min-h-[150px] custom-scrollbar overflow-y-auto hidden">
-                <!-- Result populated by JS -->
-            </div>
+            <textarea id="ai-input" class="w-full h-24 bg-slate-900/50 rounded-xl p-3 text-sm border border-white/10 text-white outline-none mb-4" placeholder="e.g. Gym at 8am, lunch at 12..."></textarea>
+            <button id="ai-plan-btn" onclick="generateSchedule()" class="w-full py-3 bg-sky-600 rounded-xl font-bold text-sm mb-6">GENERATE ✨</button>
+            <div id="ai-result" class="w-full bg-slate-900/50 rounded-2xl p-4 min-h-[100px] hidden"></div>
         </div>
-
     </div>
 
+    <!-- Move Tailwind to the end to prevent render blocking -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        const apiKey = ""; // Provided by environment
+        const apiKey = ""; 
 
         // --- INITIALIZATION ---
-        window.addEventListener('DOMContentLoaded', () => {
+        window.onload = () => {
             initClockMarkers();
             updateClock();
             setInterval(updateClock, 1000);
-        });
+            
+            // Hide loader and show app
+            document.getElementById('loading-overlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                document.getElementById('app-container').style.display = 'flex';
+            }, 500);
+        };
 
-        // --- CLOCK LOGIC ---
         const hourHand = document.getElementById('hour-hand');
         const minHand = document.getElementById('min-hand');
         const secHand = document.getElementById('sec-hand');
@@ -225,187 +229,106 @@
             if(minHand) minHand.style.transform = `translateX(-50%) rotate(${minDeg}deg)`;
             if(hourHand) hourHand.style.transform = `translateX(-50%) rotate(${hourDeg}deg)`;
 
-            const h = hours.toString().padStart(2, '0');
-            const m = minutes.toString().padStart(2, '0');
-            const s = seconds.toString().padStart(2, '0');
-            if(digitalDisplay) digitalDisplay.textContent = `${h}:${m}:${s}`;
-
-            const options = { weekday: 'long', month: 'long', day: 'numeric' };
-            if(dateDisplay) dateDisplay.textContent = now.toLocaleDateString('en-US', options);
+            if(digitalDisplay) digitalDisplay.textContent = now.toLocaleTimeString('en-GB', { hour12: false });
+            if(dateDisplay) dateDisplay.textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
         }
 
-        // --- TAB LOGIC ---
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.getElementById(`${tabName}-tab`).classList.add('active');
-
             const btns = ['clock', 'stopwatch', 'ai'];
             btns.forEach(b => {
                 const btn = document.getElementById(`${b}-tab-btn`);
-                if (b === tabName) {
-                    btn.className = "flex-1 py-2 rounded-xl text-sm font-medium transition-all bg-sky-500 text-white";
-                } else {
-                    btn.className = "flex-1 py-2 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white";
-                }
+                btn.className = b === tabName 
+                    ? "flex-1 py-2 rounded-xl text-sm font-medium transition-all bg-sky-500 text-white"
+                    : "flex-1 py-2 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white";
             });
         }
 
-        // --- STOPWATCH LOGIC ---
+        // Stopwatch logic
         let swStartTime, swElapsedTime = 0, swInterval, isRunning = false, laps = [];
-        const swDisplay = document.getElementById('sw-display');
-        const swStartBtn = document.getElementById('sw-start-btn');
-        const swLapBtn = document.getElementById('sw-lap-btn');
-        const lapsContainer = document.getElementById('laps-container');
-
         function formatTime(ms) {
-            const minutes = Math.floor(ms / 60000);
-            const seconds = Math.floor((ms % 60000) / 1000);
-            const centiseconds = Math.floor((ms % 1000) / 10);
-            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+            const m = Math.floor(ms / 60000).toString().padStart(2, '0');
+            const s = Math.floor((ms % 60000) / 1000).toString().padStart(2, '0');
+            const c = Math.floor((ms % 1000) / 10).toString().padStart(2, '0');
+            return `${m}:${s}.${c}`;
         }
 
         function toggleStopwatch() {
+            const btn = document.getElementById('sw-start-btn');
+            const lapBtn = document.getElementById('sw-lap-btn');
             if (!isRunning) {
                 isRunning = true;
                 swStartTime = Date.now() - swElapsedTime;
                 swInterval = setInterval(() => {
                     swElapsedTime = Date.now() - swStartTime;
-                    swDisplay.textContent = formatTime(swElapsedTime);
+                    document.getElementById('sw-display').textContent = formatTime(swElapsedTime);
                 }, 10);
-                swStartBtn.textContent = 'STOP';
-                swStartBtn.classList.replace('bg-sky-500', 'bg-orange-500');
-                swLapBtn.disabled = false;
+                btn.textContent = 'STOP';
+                btn.style.backgroundColor = '#f97316';
+                lapBtn.disabled = false;
+                lapBtn.classList.remove('opacity-50');
             } else {
                 isRunning = false;
                 clearInterval(swInterval);
-                swStartBtn.textContent = 'RESUME';
-                swStartBtn.classList.replace('bg-orange-500', 'bg-sky-500');
-                swLapBtn.disabled = true;
+                btn.textContent = 'RESUME';
+                btn.style.backgroundColor = '#0ea5e9';
+                lapBtn.disabled = true;
+                lapBtn.classList.add('opacity-50');
             }
         }
 
         function resetStopwatch() {
             isRunning = false; clearInterval(swInterval); swElapsedTime = 0;
-            swDisplay.textContent = '00:00.00';
-            swStartBtn.textContent = 'START';
-            swStartBtn.className = "flex-2 grow py-4 bg-sky-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-sky-500/20";
-            swLapBtn.disabled = true; laps = [];
-            lapsContainer.innerHTML = '<div class="text-slate-500 text-center text-sm mt-12">No laps recorded</div>';
+            document.getElementById('sw-display').textContent = '00:00.00';
+            document.getElementById('sw-start-btn').textContent = 'START';
+            document.getElementById('sw-start-btn').style.backgroundColor = '#0ea5e9';
+            laps = [];
+            document.getElementById('laps-container').innerHTML = '<div class="text-slate-500 text-center text-sm mt-12">No laps recorded</div>';
         }
 
-        function recordLap() { if (isRunning) { laps.unshift(swElapsedTime); renderLaps(); } }
-        function renderLaps() {
-            lapsContainer.innerHTML = laps.map((lap, index) => `
-                <div class="flex justify-between py-3 border-b border-white/5 items-center">
-                    <span class="text-slate-500 text-xs font-bold uppercase">Lap ${laps.length - index}</span>
-                    <span class="font-mono text-white">${formatTime(lap)}</span>
-                </div>
-            `).join('');
-        }
-
-        // --- GEMINI API HELPERS ---
-        async function callGemini(prompt, isJson = false) {
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-            const payload = {
-                contents: [{ parts: [{ text: prompt }] }]
-            };
-            
-            if (isJson) {
-                payload.generationConfig = {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            items: {
-                                type: "ARRAY",
-                                items: {
-                                    type: "OBJECT",
-                                    properties: {
-                                        time: { type: "STRING" },
-                                        task: { type: "STRING" }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                };
+        function recordLap() {
+            if (isRunning) {
+                laps.unshift(swElapsedTime);
+                document.getElementById('laps-container').innerHTML = laps.map((l, i) => `
+                    <div class="flex justify-between py-2 border-b border-white/5">
+                        <span class="text-slate-500 text-xs">LAP ${laps.length - i}</span>
+                        <span class="text-white font-mono">${formatTime(l)}</span>
+                    </div>
+                `).join('');
             }
-
-            let retries = 0;
-            const delay = (ms) => new Promise(res => setTimeout(res, ms));
-            
-            while (retries < 5) {
-                try {
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    const data = await response.json();
-                    if (!data.candidates) throw new Error("No candidates");
-                    return data.candidates[0].content.parts[0].text;
-                } catch (err) {
-                    retries++;
-                    await delay(Math.pow(2, retries) * 1000);
-                }
-            }
-            throw new Error("Failed to reach Gemini after retries.");
         }
 
-        // --- AI FEATURES ---
+        // AI Mock/Logic
+        async function callGemini(prompt) {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const data = await res.json();
+            return data.candidates[0].content.parts[0].text;
+        }
+
         async function generateAIQuote() {
-            const quoteText = document.getElementById('quote-text');
-            const original = quoteText.textContent;
-            quoteText.textContent = "✨ Summoning wisdom...";
-            quoteText.classList.add('shimmer');
-
+            const qt = document.getElementById('quote-text');
+            qt.textContent = "Summoning wisdom...";
             try {
-                const now = new Date();
-                const hour = now.getHours();
-                const prompt = `Generate a short, powerful motivational quote (max 15 words) about time, productivity, or living in the moment. The current time is ${hour}:00, so make it relevant to that time of day (morning focus, afternoon energy, or evening reflection). No quotes marks.`;
-                const quote = await callGemini(prompt);
-                quoteText.textContent = quote.trim();
-            } catch (e) {
-                quoteText.textContent = original;
-            } finally {
-                quoteText.classList.remove('shimmer');
-            }
+                const q = await callGemini("Short motivational quote about time. 10 words max.");
+                qt.textContent = q.replace(/"/g, '');
+            } catch (e) { qt.textContent = "Carpe Diem."; }
         }
 
         async function generateSchedule() {
             const input = document.getElementById('ai-input').value;
-            if (!input.trim()) return;
-
-            const btn = document.getElementById('ai-plan-btn');
-            const resultBox = document.getElementById('ai-result');
-            
-            btn.disabled = true;
-            btn.innerHTML = '<div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
-            resultBox.classList.remove('hidden');
-            resultBox.innerHTML = '<div class="w-full h-32 shimmer rounded-xl"></div>';
-
+            if (!input) return;
+            const resBox = document.getElementById('ai-result');
+            resBox.classList.remove('hidden');
+            resBox.innerHTML = '<div class="shimmer h-12 w-full rounded"></div>';
             try {
-                const prompt = `Convert the following disorganized schedule into a structured list of tasks with times. User Input: "${input}". Return a list of JSON objects with keys "time" and "task". Current time is ${new Date().toLocaleTimeString()}.`;
-                const response = await callGemini(prompt, true);
-                const data = JSON.parse(response);
-
-                resultBox.innerHTML = `
-                    <div class="space-y-3">
-                        <div class="text-sky-400 text-[10px] uppercase font-bold tracking-widest mb-2 italic">✨ AI Optimized Schedule</div>
-                        ${data.items.map(item => `
-                            <div class="flex gap-4 items-start p-2 rounded-lg hover:bg-white/5 transition-colors">
-                                <span class="text-sky-500 font-mono text-sm whitespace-nowrap">${item.time}</span>
-                                <span class="text-slate-200 text-sm">${item.task}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            } catch (e) {
-                resultBox.innerHTML = `<div class="text-red-400 text-sm p-4">Sorry, couldn't organize that right now. Please try again.</div>`;
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<span>GENERATE ✨</span>';
-            }
+                const plan = await callGemini(`Organize this schedule into a list: ${input}`);
+                resBox.innerHTML = `<div class="text-xs text-slate-300 whitespace-pre-wrap">${plan}</div>`;
+            } catch (e) { resBox.innerHTML = "Error connecting to AI."; }
         }
     </script>
 </body>
